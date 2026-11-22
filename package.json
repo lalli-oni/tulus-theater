@@ -1,0 +1,28 @@
+{
+  "name": "tulus-theater",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "dev": "concurrently -n api,web -c magenta,green \"npm run dev -w @tulu/server\" \"npm run dev -w @tulu/web\"",
+    "build": "npm run build -w @tulu/shared && npm run build -w @tulu/web && npm run build -w @tulu/server",
+    "start": "npm run start -w @tulu/server",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "test": "npm run test --workspaces --if-present",
+    "db:generate": "npm run db:generate -w @tulu/server",
+    "db:migrate": "npm run db:migrate -w @tulu/server",
+    "db:studio": "npm run db:studio -w @tulu/server"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "concurrently": "^9.1.0",
+    "eslint": "^9.15.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "globals": "^15.12.0",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.15.0"
+  },
+  "engines": { "node": ">=20" }
+}

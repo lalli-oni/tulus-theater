@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Statuses and addedBy are plain strings in SQLite; they are validated with zod
+// (see @tulu/shared) on the way in.
+
+model Genre {
+  id     Int           @id // TMDB genre id
+  name   String
+  series SeriesGenre[]
+  movies MovieGenre[]
+}
+
+model Series {
+  id                 Int           @id @default(autoincrement())
+  tmdbId             Int           @unique
+  title              String
+  posterUrl          String?
+  synopsis           String?
+  tmdbStatus         String? // Returning Series | Ended | Canceled | In Production | Planned
+  numberOfSeasons    Int?
+  numberOfEpisodes   Int?
+  episodeRuntime     Int?
+  nextEpisodeAirDate DateTime?
+  nextEpisodeSeason  Int?
+  nextEpisodeNumber  Int?
+
+  // Personal data: never overwritten by a TMDB refresh
+  status         String    @default("WISHLIST") // WISHLIST|WATCHING|UP_TO_DATE|ON_HOLD|COMPLETED|DROPPED
+  addedBy        String // ALECHA | LALLI | UNKNOWN
+  suggestedBy    String?
+  rating         Float?
+  notes          String?
+  currentSeason  Int?
+  currentEpisode Int?
+  dateAdded      DateTime  @default(now())
+  dateWatched    DateTime?
+
+  lastRefreshedAt  DateTime? // last SUCCESSFUL refresh
+  lastRefreshError String?
+  genres           SeriesGenre[]
+  seasons          Season[]
+}
+
+model SeriesGenre {
+  seriesId Int
+  genreId  Int
+  series   Series @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  genre    Genre  @relation(fields: [genreId], references: [id])
+
+  @@id([seriesId, genreId])
+}
+
+// One row per TMDB season. Season 0 = specials, ignored for progress unless tracked.
+model Season {
+  id           Int       @id @default(autoincrement())
+  seriesId     Int
+  seasonNumber Int
+  name         String?
+  episodeCount Int?
+  airDate      DateTime?
+
+  // Personal progress
+  watched Boolean @default(false)
+  tracked Boolean @default(true)
+
+  series   Series    @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  episodes Episode[]
+
+  @@unique([seriesId, seasonNumber])
+}
+
+// Cached episode air dates so availability works offline and uses real dates.
+model Episode {
+  id            Int       @id @default(autoincrement())
+  seasonId      Int
+  episodeNumber Int
+  airDate       DateTime?
+  runtime       Int?
+  season        Season    @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  @@unique([seasonId, episodeNumber])
+}
+
+model Movie {
+  id          Int       @id @default(autoincrement())
+  tmdbId      Int       @unique
+  title       String
+  posterUrl   String?
+  synopsis    String?
+  releaseDate DateTime?
+  runtime     Int?
+
+  status      String    @default("WISHLIST") // WISHLIST|WATCHED|DROPPED
+  addedBy     String
+  suggestedBy String?
+  rating      Float?
+  notes       String?
+  dateAdded   DateTime  @default(now())
+  dateWatched DateTime?
+
+  lastRefreshedAt DateTime?
+  genres          MovieGenre[]
+  tags            MovieTag[]
+}
+
+model MovieGenre {
+  movieId Int
+  genreId Int
+  movie   Movie @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  genre   Genre @relation(fields: [genreId], references: [id])
+
+  @@id([movieId, genreId])
+}
+
+model Tag {
+  id     Int        @id @default(autoincrement())
+  name   String     @unique
+  movies MovieTag[]
+}
+
+model MovieTag {
+  movieId Int
+  tagId   Int
+  movie   Movie @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  tag     Tag   @relation(fields: [tagId], references: [id])
+
+  @@id([movieId, tagId])
+}
+
+model TmdbCache {
+  key       String   @id
+  payload   String
+  fetchedAt DateTime
+}
+
+model AppSetting {
+  key   String @id
+  value String
+}
