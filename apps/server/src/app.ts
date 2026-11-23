@@ -4,6 +4,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Health } from '@tulu/shared';
 import { config } from './config.js';
+import { errorMiddleware } from './http.js';
+import { genresRouter } from './routes/genres.js';
+import { moviesRouter } from './routes/movies.js';
+import { seriesRouter } from './routes/series.js';
+import { tmdbRouter } from './routes/tmdb.js';
 
 export function createApp() {
   const app = express();
@@ -16,15 +21,18 @@ export function createApp() {
     res.json(body);
   });
 
+  app.use('/api/tmdb', tmdbRouter);
+  app.use('/api/series', seriesRouter);
+  app.use('/api/movies', moviesRouter);
+  app.use('/api/genres', genresRouter);
+  app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
+
   if (config.isProd && fs.existsSync(config.webDist)) {
     app.use(express.static(config.webDist));
     app.get(/^\/(?!api\/).*/, (_req, res) => res.sendFile(path.join(config.webDist, 'index.html')));
   }
 
-  app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error(err);
-    res.status(500).json({ error: 'Internal server error' });
-  });
+  app.use(errorMiddleware);
 
   return app;
 }

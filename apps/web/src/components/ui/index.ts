@@ -10,3 +10,4 @@ export * from './PosterCard';
 export * from './EmptyState';
 export * from './Feedback';
 export * from './Dialog';
+export * from './Modal';
