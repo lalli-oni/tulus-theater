@@ -1,0 +1,13 @@
+@import "tailwindcss";
+@import "./styles/tokens.css";
+@import "./styles/theme.css";
+@import "./styles/components.css";
+
+@layer base {
+  body {
+    @apply bg-surface-base text-text-primary font-sans text-body antialiased;
+    margin: 0;
+  }
+  :focus-visible { outline: none; box-shadow: var(--shadow-focus-ring); }
+  h1, h2, h3 { margin: 0; }
+}

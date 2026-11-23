@@ -211,10 +211,15 @@ Personal status is never auto-changed. The dashboard may *suggest* a change ("Yo
 
 ## 5. Design system
 
-- Tailwind theme tokens: `ink` (near-black), `charcoal`, `violet`, `emerald`, `neon` accents, plus a readable text ramp. Contrast checked to WCAG AA.
-- Headings: a gothic display face (candidates: *Cinzel* or *UnifrakturCook* for logo-only, *Cormorant* for headings). Body: *Inter*. Fonts bundled locally via `@fontsource`, so the offline requirement holds.
-- Moon-phase and occult line-art as inline SVGs, used sparingly in dividers, empty states and the logo.
-- Respects `prefers-reduced-motion`, visible focus rings, full keyboard support, ARIA on menus and dialogs.
+The theme comes from the Claude Design system "Tulu's Theater" (single theme "After dark"). It is ported into `apps/web/src/styles/`:
+
+- `tokens.css`: CSS custom properties (colour, spacing, duration). `theme.css`: Tailwind v4 `@theme` mapping. Both come from the design system's `tailwind.md`.
+- `components.css`: the design system's component styles (`tt-*` classes).
+- `components/ui/`: typed React versions of its components (Button, Input, Select, SearchBar, Tabs, Chip, StatusBadge, ReleaseBadge, AddedByBadge, NewEpisodesBadge, PosterCard, EmptyState, Toast, Banner, Dialog, Moon, Sigil, OrnamentRule, Icon). `/design` in the app shows all of them.
+- Fonts (Grenze Gotisch, Figtree, JetBrains Mono) are bundled via `@fontsource`, so the app works offline.
+- Tailwind v4 replaces the v3 setup from Phase A.
+
+Rules that matter for later phases: neon is for focus and live status only, every status is also a word, and body text never goes below 13px. Tokens are edited in the design system and re-synced, not by hand.
 
 ## 6. Implementation phases
 
