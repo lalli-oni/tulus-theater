@@ -74,7 +74,7 @@ export function EntryCard({ entry, variant, onOpen }: { entry: Entry; variant: '
       value={entry.item.status}
       disabled={change.isPending}
       onChange={(e) => change.mutate(e.target.value)}
-      className="tt-chip pointer-events-auto cursor-pointer bg-surface-overlay text-text-primary"
+      className="tt-chip tt-card-select pointer-events-auto cursor-pointer"
     >
       {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
