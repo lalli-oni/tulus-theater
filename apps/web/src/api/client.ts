@@ -1,7 +1,7 @@
 import { HealthSchema } from '@tulu/shared';
 import type {
   CreateMovieInput, CreateSeriesInput, GenreDTO, Health, MediaKind, MovieDTO, SeriesDTO,
-  TmdbSearchResponse, UpdateMovieInput, UpdateSeriesInput,
+  TmdbSearchResponse, UpdateMovieInput, UpdateSeasonInput, UpdateSeriesInput,
 } from '@tulu/shared';
 
 export class ApiRequestError extends Error {
@@ -28,7 +28,7 @@ const qs = (p: Record<string, string | number | undefined>) => {
   return e.length ? `?${new URLSearchParams(e.map(([k, v]) => [k, String(v)])).toString()}` : '';
 };
 
-export interface ListParams { q?: string; status?: string; genre?: number }
+export interface ListParams { q?: string; status?: string; genre?: number; addedBy?: string }
 
 export const api = {
   health: async (): Promise<Health> => HealthSchema.parse(await request('GET', '/api/health')),
@@ -39,6 +39,8 @@ export const api = {
     create: (b: CreateSeriesInput) => request<SeriesDTO>('POST', '/api/series', b),
     update: (id: number, b: UpdateSeriesInput) => request<SeriesDTO>('PATCH', `/api/series/${id}`, b),
     remove: (id: number) => request<void>('DELETE', `/api/series/${id}`),
+    updateSeason: (id: number, season: number, b: UpdateSeasonInput) => request<SeriesDTO>('PATCH', `/api/series/${id}/seasons/${season}`, b),
+    watchedThrough: (id: number, season: number | null) => request<SeriesDTO>('POST', `/api/series/${id}/watched-through`, { season }),
   },
   movies: {
     list: (p: ListParams = {}) => request<MovieDTO[]>('GET', `/api/movies${qs({ ...p })}`),

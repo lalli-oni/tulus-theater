@@ -1,10 +1,13 @@
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { PageHeader } from '../components/PageHeader';
 import { Banner } from '../components/ui';
+import { fetchUnknowns, UNKNOWNS_KEY } from './Unknowns';
 
 export function Settings() {
   const health = useQuery({ queryKey: ['health'], queryFn: api.health });
+  const unknowns = useQuery({ queryKey: UNKNOWNS_KEY, queryFn: fetchUnknowns });
   return (
     <section>
       <PageHeader eyebrow="Backstage" title="Settings" />
@@ -20,6 +23,11 @@ export function Settings() {
           </Banner>
         )}
         {health.data?.tmdbConfigured && <Banner tone="success" title="TMDB connected.">Search and metadata refresh are available.</Banner>}
+        {(unknowns.data?.length ?? 0) > 0 && (
+          <Banner tone="info" title={`${unknowns.data!.length} titles have no owner yet.`}>
+            <Link to="/unknowns" className="text-text-link underline">Fill in unknowns</Link>
+          </Banner>
+        )}
         {health.isPending && <p className="text-text-secondary">Checking the server…</p>}
       </div>
     </section>

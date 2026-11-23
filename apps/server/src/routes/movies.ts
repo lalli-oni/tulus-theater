@@ -13,11 +13,12 @@ export const moviesRouter = Router();
 moviesRouter.get(
   '/',
   handler(async (req, res) => {
-    const { q, status, genre } = parse(ListQuerySchema, req.query);
+    const { q, status, genre, addedBy } = parse(ListQuerySchema, req.query);
     const where: Prisma.MovieWhereInput = {};
     if (q) where.title = { contains: q };
     if (status) where.status = { in: status.split(',') };
     if (genre) where.genres = { some: { genreId: genre } };
+    if (addedBy) where.addedBy = addedBy;
     const rows = await prisma.movie.findMany({ where, include: movieInclude, orderBy: { title: 'asc' } });
     res.json(rows.map(toMovieDTO));
   }),

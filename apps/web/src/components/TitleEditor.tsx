@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { AddedBy, MovieStatus, SeriesStatus } from '@tulu/shared';
+import { suggestStatus } from '@tulu/shared';
+import type { AddedBy, MovieStatus, SeriesDTO, SeriesStatus } from '@tulu/shared';
 import { api } from '../api/client';
 import { ADDED_BY_OPTIONS, MOVIE_STATUS_OPTIONS, SERIES_STATUS_OPTIONS, formatRuntime, releaseState } from '../lib/ui-mapping';
 import type { Entry } from './entries';
+import { SeasonProgress } from './SeasonProgress';
 import { Banner, Button, Dialog, Input, Modal, ReleaseBadge, Select, Textarea } from './ui';
 
 export function TitleEditor({ entry, onClose }: { entry: Entry | null; onClose: () => void }) {
@@ -14,6 +16,8 @@ export function TitleEditor({ entry, onClose }: { entry: Entry | null; onClose: 
 function Editor({ entry, onClose }: { entry: Entry; onClose: () => void }) {
   const qc = useQueryClient();
   const item = entry.item;
+  // Season progress saves on its own; keep the latest series so suggestions stay current.
+  const [liveSeries, setLiveSeries] = useState<SeriesDTO | null>(entry.kind === 'series' ? entry.item : null);
   const [status, setStatus] = useState<string>(item.status);
   const [addedBy, setAddedBy] = useState<AddedBy>(item.addedBy);
   const [suggestedBy, setSuggestedBy] = useState(item.suggestedBy ?? '');
@@ -46,6 +50,7 @@ function Editor({ entry, onClose }: { entry: Entry; onClose: () => void }) {
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: [key] });
+      await qc.invalidateQueries({ queryKey: ['unknowns'] });
       onClose();
     },
   });
@@ -58,6 +63,8 @@ function Editor({ entry, onClose }: { entry: Entry; onClose: () => void }) {
       onClose();
     },
   });
+
+  const suggestion = liveSeries ? suggestStatus({ ...liveSeries, status: status as SeriesStatus }) : null;
 
   const meta = [
     entry.kind === 'movie' && entry.item.releaseDate ? String(new Date(entry.item.releaseDate).getUTCFullYear()) : null,
@@ -98,7 +105,18 @@ function Editor({ entry, onClose }: { entry: Entry; onClose: () => void }) {
               <Input label="Date watched" type="date" value={dateWatched} onChange={(e) => setDateWatched(e.target.value)} />
               {entry.kind === 'movie' && <Input label="Tags" hint="Comma separated" value={tags} onChange={(e) => setTags(e.target.value)} />}
             </div>
+            {suggestion && suggestion.status !== status && (
+              <Banner tone="info" title="Update the status?" action={{ label: `Set to ${SERIES_STATUS_OPTIONS.find((o) => o.value === suggestion.status)?.label}`, onClick: () => setStatus(suggestion.status) }}>
+                {suggestion.reason}
+              </Banner>
+            )}
             <Textarea label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
+            {liveSeries && (
+              <>
+                <hr className="w-full border-0 border-t border-border-subtle" />
+                <SeasonProgress series={liveSeries} onChange={setLiveSeries} />
+              </>
+            )}
             {save.error && <Banner tone="error" title="Could not save.">{(save.error as Error).message}</Banner>}
             {remove.error && <Banner tone="error" title="Could not remove it.">{(remove.error as Error).message}</Banner>}
           </div>

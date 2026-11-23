@@ -147,7 +147,20 @@ export const ListQuerySchema = z.object({
   q: z.string().trim().max(200).optional(),
   status: z.string().optional(),
   genre: z.coerce.number().int().optional(),
+  addedBy: AddedBySchema.optional(),
 });
 export type ListQuery = z.infer<typeof ListQuerySchema>;
 
 export interface ApiError { error: string; details?: unknown }
+
+export * from './progress';
+
+export const UpdateSeasonSchema = z.object({
+  watched: z.boolean().optional(),
+  tracked: z.boolean().optional(),
+});
+export type UpdateSeasonInput = z.infer<typeof UpdateSeasonSchema>;
+
+/** Mark seasons up to this number watched. null clears all season progress. */
+export const WatchedThroughSchema = z.object({ season: z.number().int().min(0).nullable() });
+export type WatchedThroughInput = z.infer<typeof WatchedThroughSchema>;
