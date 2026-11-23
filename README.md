@@ -24,7 +24,7 @@ npm run db:migrate        # creates apps/server/data/theater.db
 | `npm run db:migrate` / `db:studio` | Apply migrations / browse the database |
 
 ## Structure
-- `apps/web`: React + Vite + Tailwind
+- `apps/web`: React + Vite + Tailwind v4 (theme from the Tulu design system; see `/design` in the running app)
 - `apps/server`: Express + Prisma + SQLite
 - `packages/shared`: types and zod schemas shared by both
 

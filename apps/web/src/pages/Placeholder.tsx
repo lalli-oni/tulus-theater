@@ -1,10 +1,11 @@
-import { EmptyState } from '../components/ui/EmptyState';
+import { PageHeader } from '../components/PageHeader';
+import { EmptyState } from '../components/ui';
 
-export function Placeholder({ title, blurb }: { title: string; blurb: string }) {
+export function Placeholder({ eyebrow, title, heading = 'The stage is empty', blurb }: { eyebrow?: string; title: string; heading?: string; blurb: string }) {
   return (
     <section>
-      <h1 className="mb-6 text-3xl">{title}</h1>
-      <EmptyState title="Nothing here yet">{blurb}</EmptyState>
+      <PageHeader eyebrow={eyebrow} title={title} />
+      <EmptyState title={heading}>{blurb}</EmptyState>
     </section>
   );
 }

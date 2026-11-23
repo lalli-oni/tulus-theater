@@ -1,12 +1,19 @@
 import type { ReactNode } from 'react';
-import { Moon } from './Moon';
+import { Moon } from './Ornaments';
+import type { MoonPhase } from './types';
+import { cx } from './types';
 
-export function EmptyState({ title, children }: { title: string; children?: ReactNode }) {
+const PHASES: MoonPhase[] = ['new', 'waxing-crescent', 'first-quarter', 'waxing-gibbous', 'full'];
+
+export function EmptyState({ title, children, actions, className }: { title: string; children?: ReactNode; actions?: ReactNode; className?: string }) {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-charcoal-line px-6 py-16 text-center">
-      <Moon className="h-10 w-10 text-violet-glow" />
-      <h2 className="text-xl text-parchment">{title}</h2>
-      {children && <p className="max-w-md text-parchment-muted">{children}</p>}
-    </div>
+    <section className={cx('tt-empty', className)}>
+      <div className="tt-empty-moons" aria-hidden="true">
+        {PHASES.map((p) => <Moon key={p} phase={p} size={18} />)}
+      </div>
+      <h3 className="tt-empty-title">{title}</h3>
+      {children && <p className="tt-empty-text">{children}</p>}
+      {actions && <div className="tt-empty-actions">{actions}</div>}
+    </section>
   );
 }

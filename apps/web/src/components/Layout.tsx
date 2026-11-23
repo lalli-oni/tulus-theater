@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Moon } from './ui/Moon';
+import { SideNav } from './SideNav';
 
-const links = [
+const LINKS = [
   { to: '/', label: 'Dashboard' },
   { to: '/series', label: 'TV Series' },
   { to: '/movies', label: 'Movies' },
@@ -11,37 +11,23 @@ const links = [
 
 export function Layout() {
   return (
-    <div className="min-h-screen">
-      <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:bg-charcoal focus:p-2">
+    <div className="tt-stage flex min-h-screen">
+      <a href="#main" className="tt-sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-surface-overlay focus:p-2">
         Skip to content
       </a>
-      <header className="border-b border-charcoal-line bg-charcoal/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-8 gap-y-2 px-4 py-3">
-          <div className="flex items-center gap-2 text-violet-glow">
-            <Moon />
-            <span className="font-display text-xl font-bold tracking-widest text-parchment">Tulu&apos;s Theater</span>
-          </div>
-          <nav aria-label="Main" className="flex flex-wrap gap-1">
-            {links.map((l) => (
-              <NavLink
-                key={l.to}
-                to={l.to}
-                end={l.to === '/'}
-                className={({ isActive }) =>
-                  `rounded px-3 py-1.5 text-sm transition-colors ${
-                    isActive ? 'bg-violet-deep text-violet-glow' : 'text-parchment-muted hover:text-parchment'
-                  }`
-                }
-              >
-                {l.label}
-              </NavLink>
-            ))}
-          </nav>
-        </div>
-      </header>
-      <main id="main" className="mx-auto max-w-6xl px-4 py-8">
-        <Outlet />
-      </main>
+      <div className="sticky top-0 h-screen shrink-0 max-md:hidden">
+        <SideNav />
+      </div>
+      <div className="min-w-0 flex-1">
+        <nav aria-label="Main" className="flex gap-1 overflow-x-auto border-b border-border-subtle bg-surface-raised px-2 py-2 md:hidden">
+          {LINKS.map((l) => (
+            <NavLink key={l.to} to={l.to} end={l.to === '/'} className="tt-navlink shrink-0">{l.label}</NavLink>
+          ))}
+        </nav>
+        <main id="main" className="px-8 pb-12 pt-8 max-md:px-4">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
