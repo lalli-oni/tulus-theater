@@ -262,3 +262,21 @@ I will run typecheck, lint and the relevant tests after each phase and report wh
 9. **Backups:** Settings has "Backup now" (copies the SQLite file) plus an automatic daily backup on launch, keeping the last 14. OK?
 10. **TMDB:** you will need a free API key (v3 key or read token) from themoviedb.org, region and language default to `en-US`. Streaming-provider info is out of scope for the MVP.
 11. **Fonts and decoration:** I will propose a small visual mockup (palette + typography + one card) at the start of Phase A before building the full UI, so you can course-correct early.
+
+## 10. Status and handoff (for the next phase thread)
+
+Each phase is done in its own thread. Phases A, B merged; Phase C is in PR #4.
+
+**Where things live**
+- Pure logic (tested): `packages/shared/src/progress.ts` (progress summary, `nextEpisode`, `advanceOne`, `watchedThrough`, `autoStatus`), `apps/server/src/domain/tmdb-mapping.ts`.
+- Server: `services/tmdb.ts` (client + SQLite cache + stale fallback), `services/progress.ts` (`runProgressAction`: atomic action + automatic status + ChangeLog with before/after snapshots, `undoChange`), routes in `apps/server/src/routes/`.
+- Web: `components/ui/` (design system), `Library.tsx`, `TitleEditor.tsx`, `SeasonProgress.tsx`, `RecentChanges.tsx`, `ToastHost.tsx`, `lib/useProgressActions.ts` (undo toasts, quick watch).
+- Tests: `npm test` runs shared, server (API against a real SQLite file) and web tests.
+
+**Decisions made along the way**
+- Status automation applies only to the couple's own progress actions (watch next, season ticks, set position). It is a Settings toggle (default on). Every progress or status change is logged and undoable; only the newest change per series can be undone.
+- Specials (season 0) are tracked by default. They never hold back Up to date or Completed, and "watched through season N" leaves them alone.
+- `nextEpisode(progress, isAired)` already accepts an `isAired(season, episode)` callback. Phase D should pass real air dates from the `Episode` table so the quick-watch button and Up to date logic respect unaired episodes. Today it uses season episode counts only.
+- Not yet decided: whether TMDB-driven changes (a new episode airing moves Up to date back to Watching, an ended series becomes Completed) may also change the status automatically. The original spec says never overwrite status from TMDB info. Ask the user before building it; if allowed, log through `runProgressAction` so it is undoable.
+
+**Phase D scope (next)**: episode caching (`Episode` rows) and per-season refresh, 24h refresh on launch, `lastRefreshError` and non-blocking banners, Dashboard (Currently Watching, Up to date / Awaiting more, New Episodes Available, Upcoming Releases with "Date not announced"), availability logic with real air dates and season 0 handled separately, tests for availability and refresh-preserves-personal-data.

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { suggestStatus } from '@tulu/shared';
 import type { AddedBy, MovieStatus, SeriesDTO, SeriesStatus } from '@tulu/shared';
 import { api } from '../api/client';
 import { ADDED_BY_OPTIONS, MOVIE_STATUS_OPTIONS, SERIES_STATUS_OPTIONS, formatRuntime, releaseState } from '../lib/ui-mapping';
@@ -64,8 +63,6 @@ function Editor({ entry, onClose }: { entry: Entry; onClose: () => void }) {
     },
   });
 
-  const suggestion = liveSeries ? suggestStatus({ ...liveSeries, status: status as SeriesStatus }) : null;
-
   const meta = [
     entry.kind === 'movie' && entry.item.releaseDate ? String(new Date(entry.item.releaseDate).getUTCFullYear()) : null,
     entry.kind === 'movie' ? formatRuntime(entry.item.runtime) : entry.item.episodeRuntime ? `${entry.item.episodeRuntime}m episodes` : null,
@@ -105,16 +102,11 @@ function Editor({ entry, onClose }: { entry: Entry; onClose: () => void }) {
               <Input label="Date watched" type="date" value={dateWatched} onChange={(e) => setDateWatched(e.target.value)} />
               {entry.kind === 'movie' && <Input label="Tags" hint="Comma separated" value={tags} onChange={(e) => setTags(e.target.value)} />}
             </div>
-            {suggestion && suggestion.status !== status && (
-              <Banner tone="info" title="Update the status?" action={{ label: `Set to ${SERIES_STATUS_OPTIONS.find((o) => o.value === suggestion.status)?.label}`, onClick: () => setStatus(suggestion.status) }}>
-                {suggestion.reason}
-              </Banner>
-            )}
             <Textarea label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
             {liveSeries && (
               <>
                 <hr className="w-full border-0 border-t border-border-subtle" />
-                <SeasonProgress series={liveSeries} onChange={setLiveSeries} />
+                <SeasonProgress series={liveSeries} onChange={(s) => { setLiveSeries(s); setStatus(s.status); }} />
               </>
             )}
             {save.error && <Banner tone="error" title="Could not save.">{(save.error as Error).message}</Banner>}

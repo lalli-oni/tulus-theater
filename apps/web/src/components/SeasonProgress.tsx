@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import type { SeriesDTO } from '@tulu/shared';
-import { computeProgress } from '@tulu/shared';
+import { computeProgress, nextEpisode } from '@tulu/shared';
 import { api } from '../api/client';
+import { useRefreshSeries, useUndoToast, useWatchedNext } from '../lib/useProgressActions';
+import { RecentChanges } from './RecentChanges';
 import { Banner, Button, Input, Select } from './ui';
 
 /**
@@ -10,7 +12,8 @@ import { Banner, Button, Input, Select } from './ui';
  * No per-episode checkboxes: whole seasons plus an optional current season and episode.
  */
 export function SeasonProgress({ series, onChange }: { series: SeriesDTO; onChange: (s: SeriesDTO) => void }) {
-  const qc = useQueryClient();
+  const refresh = useRefreshSeries();
+  const announce = useUndoToast();
   const [season, setSeason] = useState(series.currentSeason != null ? String(series.currentSeason) : '');
   const [episode, setEpisode] = useState(series.currentEpisode != null ? String(series.currentEpisode) : '');
 
@@ -18,20 +21,21 @@ export function SeasonProgress({ series, onChange }: { series: SeriesDTO; onChan
     onChange(s);
     setSeason(s.currentSeason != null ? String(s.currentSeason) : '');
     setEpisode(s.currentEpisode != null ? String(s.currentEpisode) : '');
-    void qc.invalidateQueries({ queryKey: ['series'] });
+    void refresh();
   };
+  const watchNext = useWatchedNext(apply);
 
   const toggle = useMutation({
     mutationFn: (v: { season: number; watched?: boolean; tracked?: boolean }) => api.series.updateSeason(series.id, v.season, { watched: v.watched, tracked: v.tracked }),
-    onSuccess: apply,
+    onSuccess: (r) => { apply(r.series); announce(r.change); },
   });
-  const through = useMutation({ mutationFn: (n: number | null) => api.series.watchedThrough(series.id, n), onSuccess: apply });
+  const through = useMutation({ mutationFn: (n: number | null) => api.series.watchedThrough(series.id, n), onSuccess: (r) => { apply(r.series); announce(r.change); } });
   const position = useMutation({
     mutationFn: (v: { season: number | null; episode: number | null }) => api.series.update(series.id, { currentSeason: v.season, currentEpisode: v.episode }),
     onSuccess: apply,
   });
 
-  const error = (toggle.error ?? through.error ?? position.error) as Error | null;
+  const error = (toggle.error ?? through.error ?? position.error ?? watchNext.error) as Error | null;
   const progress = computeProgress(series);
   const real = series.seasons.filter((s) => s.seasonNumber !== 0);
   const specials = series.seasons.find((s) => s.seasonNumber === 0);
@@ -41,7 +45,8 @@ export function SeasonProgress({ series, onChange }: { series: SeriesDTO; onChan
 
   const episodeNum = episode.trim() === '' ? null : Number(episode);
   const episodeBad = episodeNum !== null && (!Number.isInteger(episodeNum) || episodeNum < 1);
-  const busy = toggle.isPending || through.isPending || position.isPending;
+  const busy = toggle.isPending || through.isPending || position.isPending || watchNext.isPending;
+  const next = nextEpisode(series);
 
   return (
     <div className="flex flex-col gap-4">
@@ -52,6 +57,14 @@ export function SeasonProgress({ series, onChange }: { series: SeriesDTO; onChan
           {progress.position ? ` · S${String(progress.position.season).padStart(2, '0')}E${String(progress.position.episode).padStart(2, '0')}` : ''}
         </span>
       </div>
+
+      {next && (
+        <div>
+          <Button variant="secondary" icon="check" disabled={busy} onClick={() => watchNext.mutate(series.id)}>
+            Watched S{String(next.season).padStart(2, '0')}E{String(next.episode).padStart(2, '0')}
+          </Button>
+        </div>
+      )}
 
       <ul className="m-0 grid list-none gap-2 p-0" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))' }}>
         {real.map((s) => (
@@ -115,7 +128,7 @@ export function SeasonProgress({ series, onChange }: { series: SeriesDTO; onChan
             disabled={busy}
             onChange={(e) => toggle.mutate({ season: 0, tracked: e.target.checked })}
           />
-          Track specials ({specials.episodeCount ?? 0} episodes). Off by default so they never hold up your progress.
+          Track specials ({specials.episodeCount ?? 0} episodes). Specials never hold back Up to date or Completed.
         </label>
       )}
       {specials?.tracked && (
@@ -124,6 +137,10 @@ export function SeasonProgress({ series, onChange }: { series: SeriesDTO; onChan
           Specials watched
         </label>
       )}
+      <details className="text-body-sm">
+        <summary className="cursor-pointer text-text-secondary">Recent changes</summary>
+        <div className="mt-2"><RecentChanges seriesId={series.id} limit={6} onSeries={apply} /></div>
+      </details>
       {error && <Banner tone="error" title="Could not update progress.">{error.message}</Banner>}
     </div>
   );

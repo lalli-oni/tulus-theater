@@ -164,3 +164,31 @@ export type UpdateSeasonInput = z.infer<typeof UpdateSeasonSchema>;
 /** Mark seasons up to this number watched. null clears all season progress. */
 export const WatchedThroughSchema = z.object({ season: z.number().int().min(0).nullable() });
 export type WatchedThroughInput = z.infer<typeof WatchedThroughSchema>;
+
+// ---------- Change log / undo ----------
+export interface ChangeDTO {
+  id: number;
+  seriesId: number;
+  seriesTitle: string;
+  createdAt: string;
+  action: string;
+  summary: string;
+  undone: boolean;
+  /** Only the newest not-yet-undone change of a series can be undone. */
+  canUndo: boolean;
+}
+
+/** Result of an action that changes season progress. `change` is null when nothing changed. */
+export interface ProgressResult {
+  series: SeriesDTO;
+  change: ChangeDTO | null;
+}
+
+// ---------- Settings ----------
+export const SettingsSchema = z.object({
+  automation: z.object({
+    /** Update the personal status from the couple's own progress actions (never from TMDB alone). */
+    progressStatus: z.boolean(),
+  }),
+});
+export type SettingsDTO = z.infer<typeof SettingsSchema>;

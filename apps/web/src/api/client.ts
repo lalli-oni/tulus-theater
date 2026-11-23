@@ -1,6 +1,6 @@
 import { HealthSchema } from '@tulu/shared';
 import type {
-  CreateMovieInput, CreateSeriesInput, GenreDTO, Health, MediaKind, MovieDTO, SeriesDTO,
+  ChangeDTO, CreateMovieInput, CreateSeriesInput, GenreDTO, Health, MediaKind, MovieDTO, ProgressResult, SeriesDTO, SettingsDTO,
   TmdbSearchResponse, UpdateMovieInput, UpdateSeasonInput, UpdateSeriesInput,
 } from '@tulu/shared';
 
@@ -32,6 +32,12 @@ export interface ListParams { q?: string; status?: string; genre?: number; added
 
 export const api = {
   health: async (): Promise<Health> => HealthSchema.parse(await request('GET', '/api/health')),
+  changes: (p: { seriesId?: number; limit?: number } = {}) => request<ChangeDTO[]>('GET', `/api/changes${qs({ ...p })}`),
+  undo: (changeId: number) => request<SeriesDTO>('POST', `/api/changes/${changeId}/undo`),
+  settings: {
+    get: () => request<SettingsDTO>('GET', '/api/settings'),
+    save: (b: SettingsDTO) => request<SettingsDTO>('PUT', '/api/settings', b),
+  },
   genres: () => request<GenreDTO[]>('GET', '/api/genres'),
   search: (kind: MediaKind, q: string) => request<TmdbSearchResponse>('GET', `/api/tmdb/search${qs({ kind, q })}`),
   series: {
@@ -39,8 +45,9 @@ export const api = {
     create: (b: CreateSeriesInput) => request<SeriesDTO>('POST', '/api/series', b),
     update: (id: number, b: UpdateSeriesInput) => request<SeriesDTO>('PATCH', `/api/series/${id}`, b),
     remove: (id: number) => request<void>('DELETE', `/api/series/${id}`),
-    updateSeason: (id: number, season: number, b: UpdateSeasonInput) => request<SeriesDTO>('PATCH', `/api/series/${id}/seasons/${season}`, b),
-    watchedThrough: (id: number, season: number | null) => request<SeriesDTO>('POST', `/api/series/${id}/watched-through`, { season }),
+    updateSeason: (id: number, season: number, b: UpdateSeasonInput) => request<ProgressResult>('PATCH', `/api/series/${id}/seasons/${season}`, b),
+    watchedThrough: (id: number, season: number | null) => request<ProgressResult>('POST', `/api/series/${id}/watched-through`, { season }),
+    watchedNext: (id: number) => request<ProgressResult>('POST', `/api/series/${id}/watched-next`),
   },
   movies: {
     list: (p: ListParams = {}) => request<MovieDTO[]>('GET', `/api/movies${qs({ ...p })}`),

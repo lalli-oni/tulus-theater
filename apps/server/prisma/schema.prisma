@@ -46,6 +46,7 @@ model Series {
   lastRefreshError String?
   genres           SeriesGenre[]
   seasons          Season[]
+  changes          ChangeLog[]
 }
 
 model SeriesGenre {
@@ -143,4 +144,19 @@ model TmdbCache {
 model AppSetting {
   key   String @id
   value String
+}
+
+// Every progress-affecting action (manual or automatic) with before/after snapshots, so it can be undone.
+model ChangeLog {
+  id        Int      @id @default(autoincrement())
+  seriesId  Int
+  createdAt DateTime @default(now())
+  action    String // watched-next | watched-through | season | position | status
+  summary   String
+  before    String // JSON snapshot
+  after     String // JSON snapshot
+  undone    Boolean  @default(false)
+  series    Series   @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  @@index([seriesId, id])
 }

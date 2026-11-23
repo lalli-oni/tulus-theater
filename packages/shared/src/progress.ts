@@ -24,8 +24,10 @@ export interface ProgressSummary {
   totalEpisodes: number;
   /** Latest known position, for display like S02E04. Null when nothing is watched. */
   position: { season: number; episode: number } | null;
-  /** Every tracked season that has episodes is marked watched. */
+  /** Every tracked season that has episodes is marked watched, specials included. */
   allTrackedWatched: boolean;
+  /** Every tracked regular season (not specials) with episodes is watched. Drives automatic status. */
+  mainWatched: boolean;
 }
 
 const count = (s: ProgressSeason) => s.episodeCount ?? 0;
@@ -51,11 +53,13 @@ export function computeProgress(p: ProgressInput): ProgressSummary {
   }
 
   const released = tracked.filter((s) => count(s) > 0);
+  const mainReleased = released.filter((s) => s.seasonNumber !== 0);
   return {
     watchedEpisodes,
     totalEpisodes,
     position,
     allTrackedWatched: released.length > 0 && released.every((s) => s.watched),
+    mainWatched: mainReleased.length > 0 && mainReleased.every((s) => s.watched),
   };
 }
 
@@ -72,27 +76,77 @@ export function validateCurrent(seasons: ProgressSeason[], season: number | null
 }
 
 /**
- * Mark every tracked season up to and including `season` as watched and the rest as not watched.
- * `null` clears all progress. Seasons that are not tracked (e.g. specials) are left alone.
+ * Mark every tracked regular season up to and including `season` as watched and the rest as not watched.
+ * Specials (season 0) are left alone because "through season N" says nothing about them.
+ * `null` clears all progress, specials included. Untracked seasons are never touched.
  */
 export function watchedThrough(seasons: ProgressSeason[], season: number | null): Array<{ seasonNumber: number; watched: boolean }> {
-  return seasons.filter((s) => s.tracked).map((s) => ({ seasonNumber: s.seasonNumber, watched: season !== null && s.seasonNumber <= season }));
+  return seasons
+    .filter((s) => s.tracked && (season === null || s.seasonNumber !== 0))
+    .map((s) => ({ seasonNumber: s.seasonNumber, watched: season !== null && s.seasonNumber <= season }));
 }
 
-export interface StatusSuggestion { status: SeriesStatus; reason: string }
+export interface NextEpisode { season: number; episode: number; lastOfSeason: boolean }
 
 /**
- * A gentle hint only. The app never changes the personal status by itself; the UI
- * offers this as a one-click prompt.
+ * The next unwatched episode in viewing order. Regular seasons come first;
+ * tracked specials are offered only once the regular seasons are done.
+ * `isAired` lets the caller skip episodes that have not aired yet.
  */
-export function suggestStatus(input: ProgressInput & { status: SeriesStatus; tmdbStatus: string | null }): StatusSuggestion | null {
+export function nextEpisode(p: ProgressInput, isAired: (season: number, episode: number) => boolean = () => true): NextEpisode | null {
+  const candidates = (seasons: ProgressSeason[]): NextEpisode | null => {
+    for (const s of seasons) {
+      if (s.watched || !s.episodeCount) continue;
+      const start = s.seasonNumber === p.currentSeason && p.currentEpisode ? p.currentEpisode + 1 : 1;
+      if (start > s.episodeCount) continue;
+      if (!isAired(s.seasonNumber, start)) return null; // viewing order: do not skip past an unaired episode
+      return { season: s.seasonNumber, episode: start, lastOfSeason: start >= s.episodeCount };
+    }
+    return null;
+  };
+  const tracked = p.seasons.filter((x) => x.tracked).sort((a, b) => a.seasonNumber - b.seasonNumber);
+  // An explicit current position wins, even if earlier seasons were never ticked off.
+  const current = p.currentSeason !== null && p.currentEpisode ? tracked.filter((x) => x.seasonNumber === p.currentSeason) : [];
+  return candidates(current) ?? candidates(tracked.filter((x) => x.seasonNumber !== 0)) ?? candidates(tracked.filter((x) => x.seasonNumber === 0));
+}
+
+export interface AdvanceResult {
+  /** Seasons newly completed by this step. */
+  watchedSeasons: number[];
+  currentSeason: number | null;
+  currentEpisode: number | null;
+  episode: { season: number; episode: number };
+}
+
+/** Mark the next episode watched. Finishing a season marks it watched and clears the partial pointer. */
+export function advanceOne(p: ProgressInput, isAired?: (season: number, episode: number) => boolean): AdvanceResult | null {
+  const next = nextEpisode(p, isAired);
+  if (!next) return null;
+  const episode = { season: next.season, episode: next.episode };
+  return next.lastOfSeason
+    ? { watchedSeasons: [next.season], currentSeason: null, currentEpisode: null, episode }
+    : { watchedSeasons: [], currentSeason: next.season, currentEpisode: next.episode, episode };
+}
+
+export interface AutoStatusResult { status: SeriesStatus; reason: string }
+
+/**
+ * Status that follows from the couple's own progress actions. Returns null when the
+ * status should stay as it is. Never derived from TMDB changes alone.
+ * Specials do not hold back Up to date or Completed.
+ */
+export function autoStatus(input: ProgressInput & { status: SeriesStatus; tmdbStatus: string | null }): AutoStatusResult | null {
   const progress = computeProgress(input);
-  if (input.status === 'WISHLIST' && progress.watchedEpisodes > 0) {
-    return { status: 'WATCHING', reason: 'You have recorded progress on this series.' };
-  }
+  if (progress.watchedEpisodes === 0) return null;
   const ended = input.tmdbStatus === 'Ended' || input.tmdbStatus === 'Canceled';
-  if (ended && progress.allTrackedWatched && ['WATCHING', 'UP_TO_DATE', 'ON_HOLD'].includes(input.status)) {
-    return { status: 'COMPLETED', reason: 'Every season is watched and the series has ended.' };
-  }
-  return null;
+  const target: SeriesStatus = progress.mainWatched ? (ended ? 'COMPLETED' : 'UP_TO_DATE') : 'WATCHING';
+  if (target === input.status) return null;
+  // Completed is final: further ticks never reopen it.
+  if (input.status === 'COMPLETED') return null;
+  const reason =
+    target === 'COMPLETED' ? 'Every season is watched and the series has ended.'
+    : target === 'UP_TO_DATE' ? 'You have watched everything released so far.'
+    : input.status === 'WISHLIST' ? 'You started watching it.'
+    : 'There are episodes left to watch.';
+  return { status: target, reason };
 }

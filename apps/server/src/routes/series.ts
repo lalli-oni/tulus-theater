@@ -1,11 +1,13 @@
 import { Router } from 'express';
-import { CreateSeriesSchema, ListQuerySchema, UpdateSeasonSchema, UpdateSeriesSchema, WatchedThroughSchema, validateCurrent, watchedThrough } from '@tulu/shared';
+import { CreateSeriesSchema, ListQuerySchema, UpdateSeasonSchema, UpdateSeriesSchema, WatchedThroughSchema, advanceOne, validateCurrent, watchedThrough } from '@tulu/shared';
+import type { ProgressResult } from '@tulu/shared';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
 import { HttpError, handler, idParam, parse } from '../http.js';
 import { mapTvDetails } from '../domain/tmdb-mapping.js';
 import { ensureGenres } from '../services/genres.js';
 import { seriesInclude, toSeriesDTO } from '../services/dto.js';
+import { runProgressAction } from '../services/progress.js';
 import { tmdb } from '../services/tmdb.js';
 
 export const seriesRouter = Router();
@@ -61,14 +63,14 @@ seriesRouter.post(
         addedBy: input.addedBy,
         suggestedBy: input.suggestedBy ?? null,
         genres: { create: genreIds.map((genreId) => ({ genreId })) },
-        // Season 0 (specials) is stored but not tracked unless the user opts in.
+        // Specials (season 0) are tracked by default; they never hold back Up to date or Completed.
         seasons: {
           create: meta.seasons.map((s) => ({
             seasonNumber: s.seasonNumber,
             name: s.name,
             episodeCount: s.episodeCount,
             airDate: s.airDate,
-            tracked: s.seasonNumber !== 0,
+            tracked: true,
           })),
         },
       },
@@ -77,6 +79,9 @@ seriesRouter.post(
     res.status(201).json(toSeriesDTO(row));
   }),
 );
+
+const load = (id: number) => prisma.series.findUniqueOrThrow({ where: { id }, include: seriesInclude });
+const asResult = async (id: number, change: ProgressResult['change']): Promise<ProgressResult> => ({ series: toSeriesDTO(await load(id)), change });
 
 seriesRouter.patch(
   '/:id',
@@ -99,16 +104,22 @@ seriesRouter.patch(
       rest.currentEpisode = episode;
     }
 
-    const row = await prisma.series.update({
-      where: { id },
-      data: { ...rest, ...(dateWatched !== undefined && { dateWatched: dateWatched ? new Date(dateWatched) : null }) },
-      include: seriesInclude,
+    // Progress and status edits are logged so they can be undone. An explicit status choice is never second-guessed.
+    const statusChanged = rest.status !== undefined && rest.status !== existing.status;
+    await runProgressAction(id, {
+      action: touchesCurrent ? 'position' : 'status',
+      automate: touchesCurrent && rest.status === undefined,
+      apply: async (tx) => {
+        await tx.series.update({ where: { id }, data: { ...rest, ...(dateWatched !== undefined && { dateWatched: dateWatched ? new Date(dateWatched) : null }) } });
+        if (touchesCurrent) return rest.currentSeason ? `Position set to S${String(rest.currentSeason).padStart(2, '0')}${rest.currentEpisode ? `E${String(rest.currentEpisode).padStart(2, '0')}` : ''}` : 'Position cleared';
+        return statusChanged ? `Status changed to ${String(rest.status).toLowerCase().replace(/_/g, ' ')}` : 'Details edited';
+      },
     });
-    res.json(toSeriesDTO(row));
+    res.json(toSeriesDTO(await load(id)));
   }),
 );
 
-/** Mark one season watched/unwatched, or tracked/untracked (e.g. opt in to specials). */
+/** Mark one season watched/unwatched, or tracked/untracked. */
 seriesRouter.patch(
   '/:id/seasons/:season',
   handler(async (req, res) => {
@@ -121,15 +132,21 @@ seriesRouter.patch(
     const season = await prisma.season.findUnique({ where: { seriesId_seasonNumber: { seriesId: id, seasonNumber } } });
     if (!season) throw new HttpError(404, 'Season not found');
 
-    await prisma.$transaction(async (tx) => {
-      await tx.season.update({ where: { id: season.id }, data: input });
-      // A fully watched or untracked season no longer needs a partial-progress pointer.
-      const done = input.watched === true || input.tracked === false;
-      if (done && series.currentSeason === seasonNumber) {
-        await tx.series.update({ where: { id }, data: { currentSeason: null, currentEpisode: null } });
-      }
+    const label = seasonNumber === 0 ? 'Specials' : `Season ${seasonNumber}`;
+    const change = await runProgressAction(id, {
+      action: 'season',
+      automate: true,
+      apply: async (tx) => {
+        await tx.season.update({ where: { id: season.id }, data: input });
+        // A fully watched or untracked season no longer needs a partial-progress pointer.
+        if ((input.watched === true || input.tracked === false) && series.currentSeason === seasonNumber) {
+          await tx.series.update({ where: { id }, data: { currentSeason: null, currentEpisode: null } });
+        }
+        if (input.tracked !== undefined) return `${label} ${input.tracked ? 'tracked' : 'no longer tracked'}`;
+        return `${label} marked ${input.watched ? 'watched' : 'not watched'}`;
+      },
     });
-    res.json(toSeriesDTO((await prisma.series.findUniqueOrThrow({ where: { id }, include: seriesInclude }))));
+    res.json(await asResult(id, change));
   }),
 );
 
@@ -141,13 +158,44 @@ seriesRouter.post(
     const { season } = parse(WatchedThroughSchema, req.body);
     const series = await prisma.series.findUnique({ where: { id }, include: { seasons: true } });
     if (!series) throw new HttpError(404, 'Series not found');
-    const updates = watchedThrough(series.seasons, season);
-    await prisma.$transaction([
-      ...updates.map((u) => prisma.season.update({ where: { seriesId_seasonNumber: { seriesId: id, seasonNumber: u.seasonNumber } }, data: { watched: u.watched } })),
-      // Season-level progress replaces any partial pointer.
-      prisma.series.update({ where: { id }, data: { currentSeason: null, currentEpisode: null } }),
-    ]);
-    res.json(toSeriesDTO(await prisma.series.findUniqueOrThrow({ where: { id }, include: seriesInclude })));
+    const change = await runProgressAction(id, {
+      action: 'watched-through',
+      automate: true,
+      apply: async (tx) => {
+        for (const u of watchedThrough(series.seasons, season)) {
+          await tx.season.update({ where: { seriesId_seasonNumber: { seriesId: id, seasonNumber: u.seasonNumber } }, data: { watched: u.watched } });
+        }
+        // Season-level progress replaces any partial pointer.
+        await tx.series.update({ where: { id }, data: { currentSeason: null, currentEpisode: null } });
+        return season === null ? 'All season progress cleared' : `Marked watched through season ${season}`;
+      },
+    });
+    res.json(await asResult(id, change));
+  }),
+);
+
+/** The quick "I watched the next episode" button. */
+seriesRouter.post(
+  '/:id/watched-next',
+  handler(async (req, res) => {
+    const id = idParam(req);
+    const series = await prisma.series.findUnique({ where: { id }, include: { seasons: true } });
+    if (!series) throw new HttpError(404, 'Series not found');
+    const step = advanceOne(series);
+    if (!step) throw new HttpError(409, 'There is no next episode to mark watched');
+    const code = `S${String(step.episode.season).padStart(2, '0')}E${String(step.episode.episode).padStart(2, '0')}`;
+    const change = await runProgressAction(id, {
+      action: 'watched-next',
+      automate: true,
+      apply: async (tx) => {
+        for (const n of step.watchedSeasons) {
+          await tx.season.update({ where: { seriesId_seasonNumber: { seriesId: id, seasonNumber: n } }, data: { watched: true } });
+        }
+        await tx.series.update({ where: { id }, data: { currentSeason: step.currentSeason, currentEpisode: step.currentEpisode } });
+        return `Watched ${code}`;
+      },
+    });
+    res.json(await asResult(id, change));
   }),
 );
 
