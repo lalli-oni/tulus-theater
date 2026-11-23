@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
+import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
 import { Icon } from './Icon';
 import { cx } from './types';
 
@@ -119,5 +119,24 @@ export function SearchBar({ value: valueProp, defaultValue = '', onChange, place
         ) : null}
       </div>
     </div>
+  );
+}
+
+export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> { label?: string; hint?: string; error?: string }
+
+export function Textarea({ label, hint, error, className, id: idProp, ...rest }: TextareaProps) {
+  const auto = useId();
+  const id = idProp ?? auto;
+  return (
+    <FieldShell id={id} label={label} hint={hint} error={error} className={className}>
+      <textarea
+        rows={3}
+        {...rest}
+        id={id}
+        className="tt-field-control"
+        style={{ height: 'auto', padding: 'var(--space-2) var(--space-3)', resize: 'vertical' }}
+        aria-invalid={error ? true : undefined}
+      />
+    </FieldShell>
   );
 }
