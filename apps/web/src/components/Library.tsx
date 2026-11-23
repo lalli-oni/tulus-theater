@@ -9,7 +9,8 @@ import { EntryCard } from './entries';
 import type { Entry } from './entries';
 import { PageHeader } from './PageHeader';
 import { TitleEditor } from './TitleEditor';
-import { Banner, Button, EmptyState, IconButton, SearchBar, Select, Toast } from './ui';
+import { useToast } from './ToastHost';
+import { Banner, Button, EmptyState, IconButton, SearchBar, Select } from './ui';
 
 export function Library({ kind }: { kind: MediaKind }) {
   const noun = kind === 'tv' ? 'series' : 'movie';
@@ -21,7 +22,7 @@ export function Library({ kind }: { kind: MediaKind }) {
   });
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Entry | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const toast = useToast();
   const q = useDebounced(text.trim(), 250);
 
   const params = { q: q || undefined, status: status || undefined, genre: genre ? Number(genre) : undefined };
@@ -89,13 +90,8 @@ export function Library({ kind }: { kind: MediaKind }) {
         </div>
       )}
 
-      <AddTitleModal kind={kind} open={adding} onClose={() => setAdding(false)} onAdded={(t) => setToast(`${t} added to the archive`)} />
+      <AddTitleModal kind={kind} open={adding} onClose={() => setAdding(false)} onAdded={(t) => toast({ title: `${t} added to the archive` })} />
       <TitleEditor entry={editing} onClose={() => setEditing(null)} />
-      {toast && (
-        <div className="tt-toast-region">
-          <Toast tone="success" title={toast} onDismiss={() => setToast(null)} />
-        </div>
-      )}
     </section>
   );
 }

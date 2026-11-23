@@ -5,6 +5,7 @@ import path from 'node:path';
 import type { Health } from '@tulu/shared';
 import { config } from './config.js';
 import { errorMiddleware } from './http.js';
+import { changesRouter, settingsRouter } from './routes/changes.js';
 import { genresRouter } from './routes/genres.js';
 import { moviesRouter } from './routes/movies.js';
 import { seriesRouter } from './routes/series.js';
@@ -25,6 +26,8 @@ export function createApp() {
   app.use('/api/series', seriesRouter);
   app.use('/api/movies', moviesRouter);
   app.use('/api/genres', genresRouter);
+  app.use('/api/changes', changesRouter);
+  app.use('/api/settings', settingsRouter);
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 
   if (config.isProd && fs.existsSync(config.webDist)) {
